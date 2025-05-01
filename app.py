@@ -52,6 +52,65 @@ def get_recipient_id():
         # Catch-all for other errors
         return jsonify({"error": "Internal server error", "details": str(e)}), 500
 
+@app.route('/register_linkedin_account', methods=['POST'])
+def register_linkedin_account():
+    """
+    Endpoint to register a new LinkedIn account with Unipile.
+    Expects JSON payload:
+    {
+        "username": "linkedin_email@example.com",
+        "password": "your_linkedin_password"
+    }
+    """
+    if not API_KEY:
+        return jsonify({"error": "API key not set"}), 500
+
+    payload = request.get_json() or {}
+    username = payload.get("username")
+    password = payload.get("password")
+
+    if not username or not password:
+        return jsonify({"error": "Missing 'username' or 'password' in request body"}), 400
+
+    # Prepare request for Unipile API
+    url = f"{BASE_URL}/accounts"
+    headers = {
+        "X-API-KEY": API_KEY,
+        "accept": "application/json",
+        "content-type": "application/json"
+    }
+    unipile_payload = {
+        "provider": "LINKEDIN",
+        "username": username,
+        "password": password
+    }
+
+    try:
+        resp = requests.post(url, headers=headers, json=unipile_payload)
+        resp.raise_for_status() # Raise exception for 4xx/5xx errors
+        # Return the successful response from Unipile
+        return jsonify(resp.json()), resp.status_code
+
+    except requests.exceptions.HTTPError as http_err:
+        # Forward error status and details from Unipile
+        print(f"Unipile API HTTP error occurred: {http_err}")
+        try:
+            detail = resp.json() # Try to parse JSON error response
+        except ValueError:
+            detail = resp.text # Fallback to raw text
+        return jsonify({"error": "Unipile API HTTP error", "details": detail}), resp.status_code
+
+    except requests.exceptions.RequestException as req_err:
+        # Handle connection errors, timeouts, etc.
+        print(f"Error communicating with Unipile API: {req_err}")
+        return jsonify({"error": "Failed to communicate with Unipile API", "details": str(req_err)}), 502
+
+    except Exception as e:
+        # Catch-all for other unexpected errors
+        print(f"An unexpected error occurred: {e}")
+        return jsonify({"error": "An internal server error occurred", "details": str(e)}), 500
+
+
 @app.route('/send_linkedin_message', methods=['POST'])
 def send_linkedin_message():
     if not API_KEY:
